@@ -1,0 +1,130 @@
+---
+title: "homework machine learning"
+author: "qiuchang"
+date: "2016年8月12日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+###EXECUTIVE SUMMARY    
+  Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community.
+ 
+  Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+  
+  In this project, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+Loading and Preprocessing the Data
+Setting up working directory is the first step.
+
+```{r}
+{setwd("D:\\coursea\\gitrepos\\machinelearning1")}
+ library (lattice)
+ library(ggplot2)
+ library(knitr)
+ library(caret)
+ library(corrplot)
+ library(randomForest)
+library(parallel)
+```
+# Turn off scientific notations for numbers
+```{r}
+opts_chunk$set(echo = TRUE, cache = FALSE,eval = TRUE, results = 'hold')
+options(scipen = 1)
+
+```
+
+# check if a data directory exists; if not then create a new one
+```{r}
+if (!file.exists("data"))
+{
+dir.create("data")
+}
+
+```
+
+# training and testing url and dest files
+```{r}
+url_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+dest_training <- "./data/training.csv"
+url_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+dest_testing <- "./data/testing.csv"
+```
+# Download the training and testing files and note the downloaded time
+```{r}
+download.file(url_training, destfile = dest_training, method="libcurl")
+download.file(url_testing, destfile = dest_testing, method="libcurl")
+dateDownloaded <- date()
+```
+#The training data was then loaded into R.
+```{r}
+data_training <- read.csv("./data/training.csv", na.strings= c("NA",""," "))
+data_testing <- read.csv("./data/testing.csv", na.strings= c("NA",""," "))
+
+```
+There are loads of NA values in the data. NAS are useless and may fail the training model.There are many ways solving them such as deleting NA ,predictiong NA based on its neighbour. I just delete them because the NAS are gathering in severl columns,and it make sense to train the model based on the rest samples.In addition ,the information about the athlets like name ,phone number didn't improve the performance of our model .Thus I remove these columns.
+# clean the data by removing columns with NAs
+```{r}
+training_NAs <- apply(data_training, 2, function(x) {sum(is.na(x))})
+training_new <- data_training[,which(training_NAs == 0)]
+testing_NAs <- apply(data_testing, 2, function(x) {sum(is.na(x))})
+testing_new <- data_testing[,which(testing_NAs == 0)]
+
+```
+# remove redundant columns
+```{r}
+trainingF <- training_new[8:length(training_new)]
+testingF<- testing_new[8:length(testing_new)]
+
+```
+This traing set data recorded accelerometers on the belt, forearm, arm, and dumbell of 6 participants.So these variables should be in a high correlation.
+# plot a correlation matrix using corrplot
+```{r}
+corMatrix <- cor(trainingF[, -length(trainingF)])
+corrplot(corMatrix, order = "FPC", method = "square", type = "full", tl.cex = 0.8,  tl.col = rgb(0, 0, 0))
+
+```
+In the graph, the dark red and blue colours indicate a highly negative and positive relationship respectively between the variables. However,for this training set it is ok to contain variables which in a high correlation.
+Training a Model
+For this part, a new package (parallel)would be used to improve the randomforest performance.
+And 10 fold cross validation would be used to improve the train model performance.
+
+###Train the model
+```{r}
+set.seed(2333)
+inTrain <-  createDataPartition(y =trainingF$classe, p = 0.75, list = FALSE)
+training <- trainingF[inTrain, ]
+crossval <- trainingF[-inTrain, ]
+x <- training[,-length(training)]
+y <- training[,length(training)]
+cluster <- makeCluster(detectCores() - 1)# convention to leave 1 core for OS
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+fit <- train(x,y, method="rf",data=trainingF,trControl = fitControl)
+stopCluster(cluster)
+fit
+fit$resample
+confusionMatrix.train(fit)
+```
+
+The model produced a very small OOB estimate of error rate . This was deemed good enough to progress the testing.
+
+ 
+##Prediction of Testing Data
+
+Now the test data would test the model perfomance.In addition ,this data had be cleaned in the begining.
+
+```{r}
+# predict the classes using the testing data set
+pred <- predict(fit, testingF)
+pred
+
+```
+
+##Conclusions
+It is possible to accurately predict how well or activity people do based on abundant information.And the Machine Learning shows good perfomance and result when they predict it.
+
+
+
